@@ -2212,6 +2212,7 @@ static void HWR_StoreWallRange(double startfrac, double endfrac)
 
 		INT32 texnum;
 		line_t * newline = NULL; // Multi-Property FOF
+		INT32 slopeskew = 0;	// do we have to skew that?
 
         ///TODO add slope support (fixing cutoffs, proper wall clipping) - maybe just disable highcut/lowcut if either sector or FOF has a slope
         ///     to allow fun plane intersecting in OGL? But then people would abuse that and make software look bad. :C
@@ -2283,7 +2284,23 @@ static void HWR_StoreWallRange(double startfrac, double endfrac)
 					
 					// 26/6/18: Lat': Make FOF account for slope skew		
 					// Adjust t value for sloped walls
-					if 	(!(rover->master->flags & ML_EFFECT1))	//(!(gr_linedef->flags & ML_EFFECT1))
+					
+					if (newline)	// transfer line skewing:
+					{
+						if ((newline->flags & ML_DONTPEGTOP) && (newline->flags & ML_EFFECT1))
+							slopeskew = 2;
+						else if (newline->flags & ML_EFFECT1)	// skew by top
+							slopeskew = 1;
+					}		
+					else			// normal skewing?
+					{
+						if ((rover->master->flags & ML_DONTPEGTOP) && (rover->master->flags & ML_EFFECT1))
+							slopeskew = 2;
+						else if (rover->master->flags & ML_EFFECT1)	// skew by top
+							slopeskew = 1;
+					}
+					
+					if 	(slopeskew == 0)	//(!(gr_linedef->flags & ML_EFFECT1))
 					{
 						// Unskewed
 						wallVerts[3].t = (*rover->topheight - h + offs) * grTex->scaleY;
@@ -2291,13 +2308,13 @@ static void HWR_StoreWallRange(double startfrac, double endfrac)
 						wallVerts[0].t = (*rover->topheight - l + offs) * grTex->scaleY;
 						wallVerts[1].t = (*rover->topheight - lS + offs) * grTex->scaleY;
 					}
-					else if (rover->master->flags & ML_DONTPEGTOP) //(gr_linedef->flags & ML_DONTPEGTOP)
+					else if (slopeskew == 1) //(gr_linedef->flags & ML_DONTPEGTOP)
 					{
 						// Skewed by top
 						wallVerts[0].t = (*rover->topheight - *rover->bottomheight) * grTex->scaleY;
 						wallVerts[1].t = (h - l) * grTex->scaleY;
 					}
-					else
+					else if (slopeskew == 2)
 					{
 						// Skewed by bottom
 						wallVerts[0].t = wallVerts[1].t = (*rover->topheight - *rover->bottomheight) * grTex->scaleY;
