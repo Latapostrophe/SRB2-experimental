@@ -404,12 +404,14 @@ UINT32 HWR_Lighting(INT32 light, UINT32 color, UINT32 fadecolor, boolean fogbloc
 {
 	RGBA_t realcolor, fogcolor, surfcolor;
 	INT32 alpha, fogalpha, newalpha, clightfac;
+	
+	double alphaadd;
 
 	(void)fogblockpoly;
 	
 	// You see the problem is that darker light isn't actually as dark as it SHOULD be.
-	light = 255 - ((255 - light)*100/90);
-	clightfac = 255- (255-light)*2;
+	light = 255 - ((255 - light)*100/80);
+	clightfac = 255- ((255-light)*3/2);
 	if (clightfac < 0)
 		clightfac = 0;
 	
@@ -422,12 +424,21 @@ UINT32 HWR_Lighting(INT32 light, UINT32 color, UINT32 fadecolor, boolean fogbloc
 	realcolor.rgba = color;
 	fogcolor.rgba = fadecolor;
 	
-	newalpha = realcolor.s.alpha*10/4;
+	alphaadd = (1 / (double)realcolor.s.alpha * 182) / 2;	// add additional alpha to make colormap THICCER, else it's too light!
+	
+	newalpha = realcolor.s.alpha + (INT32)alphaadd;
+	if (newalpha > 25)	// alpha doesn't get any bigger than that.
+		newalpha = 25;
+		
+	alpha = (newalpha*255)/25;
+	
+	alphaadd = (1 / (double)fogcolor.s.alpha * 182) / 2;
+	
+	newalpha = fogcolor.s.alpha + (INT32)alphaadd;
 	if (newalpha > 25)	// alpha doesn't get any bigger than that.
 		newalpha = 25;
 	
-	alpha = (newalpha*255)/25;
-	fogalpha = (fogcolor.s.alpha*255)/25;
+	fogalpha = (newalpha*255)/25;
 
 	if (1) // Only do this when fog is on, software fog mode is on, and the poly is not from a fog block
 	{
@@ -465,9 +476,9 @@ UINT32 HWR_Lighting(INT32 light, UINT32 color, UINT32 fadecolor, boolean fogbloc
 		fogcolor.s.blue = (UINT8)(CALCLIGHT(fogalpha,fogcolor.s.blue));
 
 		// Set the surface colors and further modulate the colors by light.
-		surfcolor.s.red = surfcolor.s.red+((UINT8)(CALCLIGHT((0xFF-fogalpha),(255-light))+CALCLIGHT(fogcolor.s.red,(255-light))));
-		surfcolor.s.green = surfcolor.s.green+((UINT8)(CALCLIGHT((0xFF-fogalpha),(255-light))+CALCLIGHT(fogcolor.s.green,(255-light))));
-		surfcolor.s.blue = surfcolor.s.blue+((UINT8)(CALCLIGHT((0xFF-fogalpha),(255-light))+CALCLIGHT(fogcolor.s.blue,(255-light))));
+		surfcolor.s.red = surfcolor.s.red+((UINT8)(CALCLIGHT((0xFF-fogalpha),(clightfac))+CALCLIGHT(fogcolor.s.red,(255-light))));
+		surfcolor.s.green = surfcolor.s.green+((UINT8)(CALCLIGHT((0xFF-fogalpha),(clightfac))+CALCLIGHT(fogcolor.s.green,(255-light))));
+		surfcolor.s.blue = surfcolor.s.blue+((UINT8)(CALCLIGHT((0xFF-fogalpha),(clightfac))+CALCLIGHT(fogcolor.s.blue,(255-light))));
 		surfcolor.s.alpha = 0xFF;
 	}
 
@@ -475,9 +486,9 @@ UINT32 HWR_Lighting(INT32 light, UINT32 color, UINT32 fadecolor, boolean fogbloc
 	{
 		if (1)
 		{
-			fogcolor.s.red = (UINT8)((CALCLIGHT(fogcolor.s.red,(255-light)))+(CALCLIGHT(realcolor.s.red,clightfac)));
-			fogcolor.s.green = (UINT8)((CALCLIGHT(fogcolor.s.green,(255-light)))+(CALCLIGHT(realcolor.s.green,clightfac)));
-			fogcolor.s.blue = (UINT8)((CALCLIGHT(fogcolor.s.blue,(255-light)))+(CALCLIGHT(realcolor.s.blue,clightfac)));
+			fogcolor.s.red = (UINT8)((CALCLIGHT(realcolor.s.red,(clightfac)))+(CALCLIGHT(fogcolor.s.red,clightfac)));
+			fogcolor.s.green = (UINT8)((CALCLIGHT(realcolor.s.green,(clightfac)))+(CALCLIGHT(fogcolor.s.green,clightfac)));
+			fogcolor.s.blue = (UINT8)((CALCLIGHT(realcolor.s.blue,(clightfac)))+(CALCLIGHT(fogcolor.s.blue,clightfac)));
 
 			// Set the fog options.
 			if (0) // With floors, software draws them way darker for their distance
@@ -489,9 +500,9 @@ UINT32 HWR_Lighting(INT32 light, UINT32 color, UINT32 fadecolor, boolean fogbloc
 		}
 		else
 		{
-			fogcolor.s.red = (UINT8)((CALCLIGHT(fogcolor.s.red,(255-light)))+(CALCLIGHT(realcolor.s.red,clightfac)));
-			fogcolor.s.green = (UINT8)((CALCLIGHT(fogcolor.s.green,(255-light)))+(CALCLIGHT(realcolor.s.green,clightfac)));
-			fogcolor.s.blue = (UINT8)((CALCLIGHT(fogcolor.s.blue,(255-light)))+(CALCLIGHT(realcolor.s.blue,clightfac)));
+			fogcolor.s.red = (UINT8)((CALCLIGHT(fogcolor.s.red,(255-light)))-(CALCLIGHT(realcolor.s.red,clightfac)));
+			fogcolor.s.green = (UINT8)((CALCLIGHT(fogcolor.s.green,(255-light)))-(CALCLIGHT(realcolor.s.green,clightfac)));
+			fogcolor.s.blue = (UINT8)((CALCLIGHT(fogcolor.s.blue,(255-light)))-(CALCLIGHT(realcolor.s.blue,clightfac)));
 
 			fogalpha = (UINT8)((CALCLIGHT(fogalpha,(255-light)))+(CALCLIGHT(alpha,light)));
 
@@ -515,7 +526,7 @@ UINT32 HWR_NoColormapLighting(INT32 light, UINT32 color, UINT32 fadecolor, boole
 	(void)fogblockpoly;
 	
 	// You see the problem is that darker light isn't actually as dark as it SHOULD be.
-	light = 255 - ((255 - light)*100/96);
+	light = 255 - ((255 - light)*100/80);
 	
 	// Don't go out of bounds
 	if (light < 0)
@@ -796,7 +807,10 @@ static void HWR_RenderPlane(sector_t *sector, extrasubsector_t *xsub, boolean is
 
 	// only useful for flat coloured triangles
 	//Surf.FlatColor = 0xff804020;
-
+	
+	if (PolyFlags & (PF_Translucent))	// software has a weird bug where translucent surfaces are fullbright, reproduce this:
+		lightlevel = 255;
+	
 	// use different light tables
 	// for horizontal / vertical / diagonal
 	// note: try to get the same visual feel as the original
@@ -819,7 +833,7 @@ static void HWR_RenderPlane(sector_t *sector, extrasubsector_t *xsub, boolean is
 			ffloor_t *caster = psector->lightlist[R_GetPlaneLight(psector, fixedheight, false)].caster;
 			psector = caster ? &sectors[caster->secnum] : psector;
 
-			if (caster)
+			if (caster && (!PolyFlags & (PF_Translucent)))
 			{
 				lightlevel = psector->lightlevel;
 				Surf.FlatColor.s.red = Surf.FlatColor.s.green = Surf.FlatColor.s.blue = LightLevelToLum(lightlevel);
@@ -834,7 +848,7 @@ static void HWR_RenderPlane(sector_t *sector, extrasubsector_t *xsub, boolean is
 		Surf.FlatColor.rgba = HWR_NoColormapLighting(lightlevel,NORMALFOG,FADEFOG, false, true);
 
 #endif // NOPE
-
+	
 	if (planecolormap)
 	{
 		if (fogplane)
@@ -2203,7 +2217,8 @@ static void HWR_StoreWallRange(double startfrac, double endfrac)
         ///     to allow fun plane intersecting in OGL? But then people would abuse that and make software look bad. :C
 		highcut = gr_frontsector->ceilingheight < gr_backsector->ceilingheight ? gr_frontsector->ceilingheight : gr_backsector->ceilingheight;
 		lowcut = gr_frontsector->floorheight > gr_backsector->floorheight ? gr_frontsector->floorheight : gr_backsector->floorheight;
-
+		
+	
 		if (gr_backsector->ffloors)
 		{
 			for (rover = gr_backsector->ffloors; rover; rover = rover->next)
@@ -2234,7 +2249,7 @@ static void HWR_StoreWallRange(double startfrac, double endfrac)
 				//Hurdler: HW code starts here
 				//FIXME: check if peging is correct
 				// set top/bottom coords
-
+				
 				wallVerts[3].y = FIXED_TO_FLOAT(h);
 				wallVerts[2].y = FIXED_TO_FLOAT(hS);
 				wallVerts[0].y = FIXED_TO_FLOAT(l);
@@ -2246,6 +2261,7 @@ static void HWR_StoreWallRange(double startfrac, double endfrac)
 					h = highcut;
 				if (l < lowcut)
 					l = lowcut;
+						
 				//Hurdler: HW code starts here
 				//FIXME: check if peging is correct
 				// set top/bottom coords
@@ -2264,11 +2280,30 @@ static void HWR_StoreWallRange(double startfrac, double endfrac)
 #ifdef ESLOPE // P.S. this is better-organized than the old version
 					fixed_t offs = sides[(newline ? newline : rover->master)->sidenum[0]].rowoffset;
 					grTex = HWR_GetTexture(texnum);
-
-					wallVerts[3].t = (*rover->topheight - h + offs) * grTex->scaleY;
-					wallVerts[2].t = (*rover->topheight - hS + offs) * grTex->scaleY;
-					wallVerts[0].t = (*rover->topheight - l + offs) * grTex->scaleY;
-					wallVerts[1].t = (*rover->topheight - lS + offs) * grTex->scaleY;
+					
+					// 26/6/18: Lat': Make FOF account for slope skew		
+					// Adjust t value for sloped walls
+					if 	(!(rover->master->flags & ML_EFFECT1))	//(!(gr_linedef->flags & ML_EFFECT1))
+					{
+						// Unskewed
+						wallVerts[3].t = (*rover->topheight - h + offs) * grTex->scaleY;
+						wallVerts[2].t = (*rover->topheight - hS + offs) * grTex->scaleY;
+						wallVerts[0].t = (*rover->topheight - l + offs) * grTex->scaleY;
+						wallVerts[1].t = (*rover->topheight - lS + offs) * grTex->scaleY;
+					}
+					else if (rover->master->flags & ML_DONTPEGTOP) //(gr_linedef->flags & ML_DONTPEGTOP)
+					{
+						// Skewed by top
+						wallVerts[0].t = (*rover->topheight - *rover->bottomheight) * grTex->scaleY;
+						wallVerts[1].t = (h - l) * grTex->scaleY;
+					}
+					else
+					{
+						// Skewed by bottom
+						wallVerts[0].t = wallVerts[1].t = (*rover->topheight - *rover->bottomheight) * grTex->scaleY;
+						wallVerts[3].t = wallVerts[0].t - (*rover->topheight - *rover->bottomheight) * grTex->scaleY;
+						wallVerts[2].t = wallVerts[1].t - (h - l) * grTex->scaleY;
+					}
 #else
 					grTex = HWR_GetTexture(texnum);
 
@@ -4321,6 +4356,7 @@ static void HWR_SplitSprite(gr_vissprite_t *spr)
 	{
 		fixed_t h = sector->lightlist[i].slope ? P_GetZAt(sector->lightlist[i].slope, spr->mobj->x, spr->mobj->y)
 					: sector->lightlist[i].height;
+	
 		if (h <= temp)
 		{
 			if (!(spr->mobj->frame & FF_FULLBRIGHT))
